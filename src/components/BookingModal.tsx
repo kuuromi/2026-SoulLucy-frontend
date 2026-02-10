@@ -10,32 +10,33 @@ interface ModalProps {
 
 const BookingModal: React.FC<ModalProps> = ({ isOpen, onClose, onSuccess, editData }) => {
   const [rooms, setRooms] = useState<any[]>([]);
-  const [formData, setFormData] = useState<{
-  userName: string;
-  roomId: string | number;
-  status: string;
-}>({ 
-  userName: '', 
-  roomId: '', 
-  status: 'Pending' 
-});
+  const [formData, setFormData] = useState({
+    userName: '', 
+    roomId: '' as string | number, 
+    date: '', 
+    time: '', 
+    purpose: '', 
+    status: 'Pending'
+  });
 
   useEffect(() => {
     if (isOpen) {
       bookingService.getRooms().then(res => {
-        const dataRaw = res.data;
-        const dataFinal = dataRaw.$values || dataRaw; 
-        setRooms(Array.isArray(dataFinal) ? dataFinal : []);
-      }).catch(err => console.error("Gagal ambil data ruangan:", err));
+        const data = res.data.$values || res.data;
+        setRooms(Array.isArray(data) ? data : []);
+      });
 
       if (editData) {
         setFormData({ 
           userName: editData.userName, 
           roomId: editData.roomId, 
+          date: editData.date || '', 
+          time: editData.time || '', 
+          purpose: editData.purpose || '', 
           status: editData.status 
         });
       } else {
-        setFormData({ userName: '', roomId: '', status: 'Pending' });
+        setFormData({ userName: '', roomId: '', date: '', time: '', purpose: '', status: 'Pending' });
       }
     }
   }, [isOpen, editData]);
@@ -48,62 +49,81 @@ const BookingModal: React.FC<ModalProps> = ({ isOpen, onClose, onSuccess, editDa
       } else {
         await bookingService.create(formData);
       }
-      onSuccess();
-      onClose();
+      onSuccess(); onClose();
     } catch (err) {
-      alert("Gagal menyimpan data. Pastikan semua input benar.");
+      alert("Gagal menyimpan data.");
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" style={{
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-      backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
-    }}>
-      <div className="modal-content" style={{
-        backgroundColor: '#2d2d2d', padding: '30px', borderRadius: '12px', width: '400px', color: 'white'
-      }}>
-        <h2 style={{ marginBottom: '20px' }}>{editData ? "Edit Peminjaman" : "Peminjaman Baru"}</h2>
+    <div style={modalOverlay}>
+      <div style={modalContent}>
+        <h2 style={modalTitle}><span>📅</span> {editData ? "Edit Peminjaman" : "Peminjaman Baru"}</h2>
         <form onSubmit={handleSubmit}>
-          <div className="form-group" style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px' }}>Nama Peminjam</label>
-            <input 
-              style={{ width: '100%', padding: '10px', backgroundColor: '#3c3c3c', border: '1px solid #555', color: 'white', borderRadius: '4px' }}
-              value={formData.userName} 
-              required 
-              onChange={e => setFormData({...formData, userName: e.target.value})} 
-            />
+          {/* Input Nama */}
+          <div style={formGroup}>
+            <label style={label}>Nama Peminjam</label>
+            <input style={input} placeholder="Nama Lengkap" value={formData.userName} required onChange={e => setFormData({...formData, userName: e.target.value})} />
           </div>
-          <div className="form-group" style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '5px' }}>Pilih Ruangan</label>
-            <select 
-              style={{ width: '100%', padding: '10px', backgroundColor: '#3c3c3c', border: '1px solid #555', color: 'white', borderRadius: '4px' }}
-              value={formData.roomId} 
-              required
-              onChange={e => setFormData({...formData, roomId: Number(e.target.value)})}
-            >
-              <option value="">-- Pilih --</option>
-              {rooms.map(r => (
-                <option key={r.id} value={r.id}>
-                  {r.name} ({r.capacity} Orang)
-                </option>
-              ))}
+          <div style={formGroup}>
+            <label style={label}>Pilih Ruangan</label>
+            <select style={input} value={formData.roomId} required onChange={e => setFormData({...formData, roomId: Number(e.target.value)})}>
+              <option value="">-- Pilih Ruangan --</option>
+              {rooms.map(r => <option key={r.id} value={r.id} style={{color: '#333'}}>{r.name} ({r.capacity} Orang)</option>)}
             </select>
           </div>
-          
-          <button type="submit" style={{ backgroundColor: '#198754', color: 'white', padding: '12px', width: '100%', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
-            {editData ? "Simpan Perubahan" : "Simpan Booking"}
-          </button>
-          
-          <button type="button" onClick={onClose} style={{ marginTop: '10px', width: '100%', background: 'none', color: '#aaa', border: '1px solid #444', padding: '10px', borderRadius: '6px', cursor: 'pointer' }}>
-            Batal
-          </button>
+          <div style={{ display: 'flex', gap: '15px', marginBottom: '18px' }}>
+            <div style={{ flex: 1 }}>
+              <label style={label}>Tanggal</label>
+              <input type="date" style={input} value={formData.date} required onChange={e => setFormData({...formData, date: e.target.value})} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={label}>Waktu</label>
+              <input type="time" style={input} value={formData.time} required onChange={e => setFormData({...formData, time: e.target.value})} />
+            </div>
+          </div>
+          <div style={formGroup}>
+            <label style={label}>Keperluan</label>
+            <textarea 
+              style={{ ...input, height: '80px', resize: 'none' }} 
+              placeholder="Tujuan Peminjaman" 
+              value={formData.purpose} 
+              required 
+              onChange={e => setFormData({...formData, purpose: e.target.value})} 
+            />
+          </div>
+
+          <button type="submit" style={btnSubmit}>{editData ? "Simpan Perubahan" : "Simpan Booking"}</button>
+          <button type="button" onClick={onClose} style={btnCancel}>Batal</button>
         </form>
       </div>
     </div>
   );
 };
+
+const modalOverlay: React.CSSProperties = {
+  position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+  backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(5px)', 
+  display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000
+};
+
+const modalContent: React.CSSProperties = {
+  backgroundColor: 'white', padding: '35px', borderRadius: '24px', 
+  width: '450px', color: '#333', boxShadow: '0 25px 50px rgba(0,0,0,0.2)', 
+  fontFamily: "'Poppins', sans-serif"
+};
+
+const modalTitle: React.CSSProperties = {
+  marginBottom: '25px', fontSize: '22px', fontWeight: 700, 
+  color: '#667eea', display: 'flex', alignItems: 'center', gap: '10px'
+};
+
+const formGroup = { marginBottom: '18px' };
+const label = { display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: 600, color: '#666' };
+const input = { width: '100%', padding: '12px 15px', backgroundColor: '#f8f9ff', border: '2px solid #e0e7ff', borderRadius: '12px', color: '#333', outline: 'none', boxSizing: 'border-box' as const, fontSize: '14px' };
+const btnSubmit = { backgroundColor: '#4caf50', color: 'white', padding: '16px', width: '100%', border: 'none', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', fontSize: '16px', marginTop: '10px' };
+const btnCancel = { marginTop: '15px', width: '100%', background: 'none', color: '#888', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 500 };
 
 export default BookingModal;
