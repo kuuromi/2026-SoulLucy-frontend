@@ -4,16 +4,42 @@ import BookingModal from './components/BookingModal'
 import { 
   LayoutDashboard, Users, Clock, Trophy, Search, 
   CheckCircle, Edit, Trash2, Monitor, Coffee, 
-  School, Theater, ChevronDown, Eye, Sparkles 
+  School, Theater, ChevronDown, Eye, Sparkles, XCircle 
 } from 'lucide-react'
+
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type }: any) => {
+  if (!isOpen) return null;
+  const mainColor = type === 'approve' ? '#4caf50' : '#f44336';
+  const icon = type === 'approve' ? '✅' : '❌';
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(5px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000 }}>
+      <div style={{ backgroundColor: 'white', padding: '40px', borderRadius: '24px', width: '400px', boxShadow: '0 25px 50px rgba(0,0,0,0.2)', fontFamily: "'Poppins', sans-serif" }}>
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+          <div style={{ fontSize: '50px', marginBottom: '10px' }}>{icon}</div>
+          <h2 style={{ fontSize: '22px', fontWeight: 700, color: mainColor, margin: 0 }}>{title}</h2>
+        </div>
+        <p style={{ color: '#666', fontSize: '14px', lineHeight: '1.6', textAlign: 'center' }}>{message}</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '30px' }}>
+          <button onClick={onConfirm} style={{ backgroundColor: mainColor, color: 'white', padding: '14px', width: '100%', border: 'none', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', fontSize: '16px' }}>Ya, Lanjutkan</button>
+          <button onClick={onClose} style={{ background: 'none', color: '#888', border: 'none', cursor: 'pointer', fontWeight: 500, padding: '10px' }}>Batal</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 function App() {
   const [peminjam, setPeminjam] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [bookingToEdit, setBookingToEdit] = useState<any>(null);
+  const [isReadOnly, setIsReadOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
+
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState({ id: 0, userName: '', type: 'approve' as 'approve' | 'reject' });
 
   const fetchBookings = () => {
     bookingService.getAll().then(res => {
@@ -39,15 +65,42 @@ function App() {
   }, []);
 
   const getDynamicStatus = (roomName: string) => {
-    const isBooked = peminjam.some(p => 
-      (p.roomName || '').toLowerCase() === (roomName || '').toLowerCase() && 
-      (p.status === 'Approved' || p.status === 'Pending')
+    const activeBookings = peminjam.filter(p => 
+      (p.roomName || '').toLowerCase() === (roomName || '').toLowerCase()
     );
-    return isBooked ? 'In Use' : 'Available';
+    if (activeBookings.some(p => p.status === 'Approved')) return 'In Use';
+    if (activeBookings.some(p => p.status === 'Pending')) return 'Booked';
+    return 'Available';
+  };
+
+  const getPopularRooms = () => {
+    if (peminjam.length === 0) return 'Belum ada data';
+    const counts: { [key: string]: number } = {};
+    peminjam.forEach(p => {
+      const name = p.roomName || 'Unknown';
+      counts[name] = (counts[name] || 0) + 1;
+    });
+    const maxVal = Math.max(...Object.values(counts));
+    const topRooms = Object.keys(counts).filter(name => counts[name] === maxVal);
+    return topRooms.join(', ');
   };
 
   const handleShowDetail = (item: any) => {
-    alert(`📄 DETAIL PEMINJAMAN\n\nNama: ${item.userName}\nRuangan: ${item.roomName}\nTanggal: ${item.date || '-'}\nWaktu: ${item.time || '-'}\nKeperluan: ${item.purpose || '-'}`);
+    setBookingToEdit(item);
+    setIsReadOnly(true);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenCreate = () => {
+    setBookingToEdit(null);
+    setIsReadOnly(false);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (item: any) => {
+    setBookingToEdit(item);
+    setIsReadOnly(false);
+    setIsModalOpen(true);
   };
 
   const handleDelete = async (id: number) => {
@@ -57,8 +110,15 @@ function App() {
     }
   };
 
-  const handleApprove = async (id: number) => {
-    await bookingService.updateStatus(id, { status: 'Approved' });
+  const triggerConfirm = (id: number, userName: string, type: 'approve' | 'reject') => {
+    setConfirmConfig({ id, userName, type });
+    setIsConfirmOpen(true);
+  };
+
+  const executeStatusUpdate = async () => {
+    const newStatus = confirmConfig.type === 'approve' ? 'Approved' : 'Rejected';
+    await bookingService.updateStatus(confirmConfig.id, { status: newStatus });
+    setIsConfirmOpen(false);
     fetchBookings();
   };
 
@@ -113,33 +173,27 @@ function App() {
           <div style={statCardStyle('#4caf50')}>
             <div style={statIconStyle('#e8f5e9')}><Trophy size={24} color="#4caf50" /></div>
             <div style={statLabelStyle}>Ruangan Terlaris</div>
-            <div style={{ fontSize: '18px', fontWeight: 700, color: '#333' }}>Auditorium</div>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#333', lineHeight: '1.4', marginTop: '5px' }}>
+              {getPopularRooms()}
+            </div>
           </div>
         </section>
 
         <section style={{ padding: '20px 40px' }}>
           <h3 style={{ color: '#333', marginBottom: '15px', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '10px' }}>🏢 Manajemen Ruangan</h3>
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', 
-            gap: '12px' 
-          }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
             {rooms.map(room => {
               const currentStatus = getDynamicStatus(room.name);
               return (
                 <div key={room.id} style={roomCardStyleCompact}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                    <div style={{ fontWeight: 700, color: '#333', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{room.name}</div>
+                    <div style={{ fontWeight: 700, color: '#333', fontSize: '13px' }}>{room.name}</div>
                     {getRoomIcon(room.name)}
                   </div>
-
                   <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-start', marginBottom: '8px' }}>
                     <Sparkles size={10} color="#ff9800" style={{ marginTop: '2px' }} />
-                    <div style={{ color: '#777', fontSize: '10px', lineHeight: '1.4', fontWeight: 400 }}>
-                      {room.facilities || 'Fasilitas Standar'}
-                    </div>
+                    <div style={{ color: '#777', fontSize: '10px', lineHeight: '1.4' }}>{room.facilities || 'Fasilitas Standar'}</div>
                   </div>
-                  
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
                     <span style={roomStatusStyleCompact(currentStatus)}>{currentStatus}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#555', fontSize: '11px', fontWeight: 700 }}>
@@ -161,13 +215,14 @@ function App() {
             </div>
             <div style={{ position: 'relative', flex: 1, minWidth: '180px' }}>
               <select style={selectStyle} onChange={(e) => setFilterStatus(e.target.value)}>
-                <option value="All" style={{color: '#333'}}>📊 Semua Status</option>
-                <option value="Pending" style={{color: '#333'}}>⏳ Pending</option>
-                <option value="Approved" style={{color: '#333'}}>✅ Approved</option>
+                <option value="All">📊 Semua Status</option>
+                <option value="Pending">⏳ Pending</option>
+                <option value="Approved">✅ Approved</option>
+                <option value="Rejected">❌ Rejected</option>
               </select>
               <ChevronDown style={{ position: 'absolute', right: '15px', top: '13px', color: '#667eea', pointerEvents: 'none' }} size={18} />
             </div>
-            <button onClick={() => { setBookingToEdit(null); setIsModalOpen(true); }} style={btnMainStyle}>+ Booking Baru</button>
+            <button onClick={handleOpenCreate} style={btnMainStyle}>+ Booking Baru</button>
           </div>
 
           <div style={{ overflowX: 'auto', borderRadius: '15px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
@@ -179,7 +234,6 @@ function App() {
                   <th style={thStyle}>Ruangan</th>
                   <th style={thStyle}>Tanggal</th>
                   <th style={thStyle}>Waktu</th>
-                  <th style={thStyle}>Keperluan</th>
                   <th style={thStyle}>Status</th>
                   <th style={{ ...thStyle, textAlign: 'center' }}>Aksi</th>
                 </tr>
@@ -192,15 +246,17 @@ function App() {
                     <td style={tdStyle}>{item.roomName}</td>
                     <td style={tdStyle}>{item.date || '-'}</td>
                     <td style={tdStyle}>{item.time || '-'}</td>
-                    <td style={tdStyle}>{item.purpose || '-'}</td>
                     <td style={tdStyle}><span style={statusBadgeStyle(item.status)}>{item.status}</span></td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                         <button onClick={() => handleShowDetail(item)} style={btnIconStyle('#2196f3')} title="Detail"><Eye size={16} /></button>
                         {item.status === 'Pending' && (
-                          <button onClick={() => handleApprove(item.id)} style={btnIconStyle('#4caf50')} title="Approve"><CheckCircle size={16} /></button>
+                          <>
+                            <button onClick={() => triggerConfirm(item.id, item.userName, 'approve')} style={btnIconStyle('#4caf50')} title="Approve"><CheckCircle size={16} /></button>
+                            <button onClick={() => triggerConfirm(item.id, item.userName, 'reject')} style={btnIconStyle('#f44336')} title="Reject"><XCircle size={16} /></button>
+                          </>
                         )}
-                        <button onClick={() => {setBookingToEdit(item); setIsModalOpen(true);}} style={btnIconStyle('#ff9800')} title="Edit"><Edit size={16} /></button>
+                        <button onClick={() => handleOpenEdit(item)} style={btnIconStyle('#ff9800')} title="Edit"><Edit size={16} /></button>
                         <button onClick={() => handleDelete(item.id)} style={btnIconStyle('#f44336')} title="Hapus"><Trash2 size={16} /></button>
                       </div>
                     </td>
@@ -212,43 +268,48 @@ function App() {
         </section>
       </div>
 
-      <BookingModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={fetchBookings} editData={bookingToEdit} />
+      <BookingModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onSuccess={fetchBookings} 
+        editData={bookingToEdit} 
+        readOnly={isReadOnly} 
+      />
+
+      <ConfirmModal 
+        isOpen={isConfirmOpen}
+        onClose={() => setIsConfirmOpen(false)}
+        onConfirm={executeStatusUpdate}
+        type={confirmConfig.type}
+        title={confirmConfig.type === 'approve' ? 'Setujui Peminjaman' : 'Tolak Peminjaman'}
+        message={`Apakah kamu yakin ingin memproses data milik "${confirmConfig.userName}"? Tindakan ini akan merubah status ketersediaan ruangan.`}
+      />
     </div>
   )
 }
-
-const roomCardStyleCompact = {
-  backgroundColor: 'white',
-  borderRadius: '12px',
-  padding: '12px 16px',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
-  border: '1px solid #f0f0f0',
-  display: 'flex',
-  flexDirection: 'column' as const,
-  minHeight: '110px'
-};
-
-const roomStatusStyleCompact = (s: string) => ({
-  display: 'inline-block',
-  padding: '3px 8px',
-  borderRadius: '12px',
-  fontSize: '9px',
-  fontWeight: 800,
-  backgroundColor: s === 'Available' ? '#e8f5e9' : '#ffebee',
-  color: s === 'Available' ? '#4caf50' : '#f44336',
-  textTransform: 'uppercase' as const
-});
 
 const statCardStyle = (color: string) => ({ backgroundColor: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 15px rgba(0,0,0,0.08)', borderLeft: `4px solid ${color}` });
 const statIconStyle = (bg: string) => ({ width: '50px', height: '50px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '15px', backgroundColor: bg });
 const statLabelStyle = { color: '#666', fontSize: '14px', fontWeight: 500 };
 const statValueStyle = (c: string) => ({ fontSize: '32px', fontWeight: 700, color: c });
+const roomCardStyleCompact = { backgroundColor: 'white', borderRadius: '12px', padding: '12px 16px', boxShadow: '0 4px 12px rgba(0,0,0,0.06)', border: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column' as const, minHeight: '110px' };
+const roomStatusStyleCompact = (s: string) => {
+  let bg = '#e8f5e9'; let color = '#4caf50';
+  if (s === 'In Use') { bg = '#ffebee'; color = '#f44336'; }
+  else if (s === 'Booked') { bg = '#fff3e0'; color = '#ff9800'; }
+  return { display: 'inline-block', padding: '3px 10px', borderRadius: '15px', fontSize: '10px', fontWeight: 800, backgroundColor: bg, color: color, textTransform: 'uppercase' as const };
+};
+const statusBadgeStyle = (s: string) => {
+  let bg = '#fff3e0'; let color = '#ff9800';
+  if (s === 'Approved') { bg = '#e8f5e9'; color = '#4caf50'; }
+  else if (s === 'Rejected') { bg = '#ffebee'; color = '#f44336'; }
+  return { padding: '6px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, backgroundColor: bg, color: color };
+};
 const inputStyle = { width: '100%', padding: '12px 15px 12px 45px', border: '2px solid #e0e7ff', borderRadius: '12px', outline: 'none', fontSize: '14px', backgroundColor: 'white', color: '#333' };
 const selectStyle = { width: '100%', padding: '12px 40px 12px 15px', border: '2px solid #e0e7ff', borderRadius: '12px', outline: 'none', backgroundColor: 'white', fontSize: '14px', cursor: 'pointer', appearance: 'none' as const, color: '#333' };
 const btnMainStyle = { backgroundColor: '#4caf50', color: 'white', border: 'none', padding: '14px 25px', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', fontSize: '14px' };
 const thStyle = { padding: '15px', textAlign: 'left' as const, fontSize: '14px', fontWeight: 600 };
 const tdStyle = { padding: '15px', fontSize: '14px', color: '#333' };
-const statusBadgeStyle = (s: string) => ({ padding: '6px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, backgroundColor: s === 'Approved' ? '#e8f5e9' : '#fff3e0', color: s === 'Approved' ? '#4caf50' : '#ff9800' });
 const btnIconStyle = (bg: string) => ({ backgroundColor: bg, color: 'white', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer', display: 'flex' });
 
 export default App;
